@@ -1,0 +1,31 @@
+.form-input,
+.form-button {
+    width: 20vw;
+    margin: 10px 0 !important;
+}
+
+.form-button {
+    padding: 15px !important;
+}
+
+.set-form-button,
+.set-form-input {
+    width: 15vw;
+    margin: 10px 0 !important;
+}
+
+.set-form-button {
+    padding: 16px 0 !important;
+}
+
+.cache-form {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 5px;
+    min-height: 215px;
+}
+
+.cache-form-tabs {
+    border-bottom: 1px solid #e0e0e0;
+    border-color: #e0e0e0;
+}
