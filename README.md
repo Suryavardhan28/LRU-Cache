@@ -33,6 +33,10 @@ WebSocket is a communication protocol that provides full-duplex communication ch
 
 In this project, the WebSocket connection is established in the frontend to communicate with the backend server. This allows the frontend to receive real-time updates about the cache state.
 
+### Auto eviction of items
+
+When the cache is full, the least recently accessed item will be automatically evicted from the cache.
+
 ### Concurrency
 
 The LRU cache implementation in this project is concurrent in nature. It uses a `sync.Mutex` to ensure that only one goroutine can access the cache's critical sections at a time, making it safe for concurrent use. The `sync.Mutex` is used to lock and unlock the cache during operations like `Set`, `Get`, and `Delete`, ensuring thread safety.
@@ -86,8 +90,8 @@ To get started with this project, you need to set up both the backend and the fr
     ```
 
 3. Create a `.env` file in the `server` directory and add the following environment variables:
-   
-   **Note** : Default environment variables are provided below and is present in the repository. You can change the values based on your needs.
+
+    **Note** : Default environment variables are provided below and is present in the repository. You can change the values based on your needs.
 
     - The `LRU_CACHE_SIZE` is the maximum number of items that the LRU cache can hold. Define the size of the cache based on your needs.
     - The `PORT` is the port number that the server will listen on.
@@ -99,7 +103,7 @@ To get started with this project, you need to set up both the backend and the fr
     ALLOWED_ORIGIN=http://localhost:3000
     ```
 
-5. Run the server:
+4. Run the server:
     ```sh
     go run main.go
     ```
