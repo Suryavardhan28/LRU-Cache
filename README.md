@@ -86,6 +86,7 @@ To get started with this project, you need to set up both the backend and the fr
     ```
 
 3. Create a `.env` file in the `server` directory and add the following environment variables:
+   
    **Note** : Default environment variables are provided below and is present in the repository. You can change the values based on your needs.
 
     - The `LRU_CACHE_SIZE` is the maximum number of items that the LRU cache can hold. Define the size of the cache based on your needs.
@@ -98,7 +99,7 @@ To get started with this project, you need to set up both the backend and the fr
     ALLOWED_ORIGIN=http://localhost:3000
     ```
 
-4. Run the server:
+5. Run the server:
     ```sh
     go run main.go
     ```
