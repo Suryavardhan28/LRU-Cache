@@ -2,6 +2,7 @@ package cache
 
 import (
 	"container/list"
+	"context"
 	"server/internal/logger"
 	"sync"
 	"time"
@@ -15,22 +16,29 @@ type CacheItem struct {
 
 type EvictionCallback func(key string, value interface{})
 
+type Routine struct {
+	CancelFunc context.CancelFunc
+	Duration   time.Duration
+}
+
 type LRUCache struct {
-	capacity int
-	cache    map[string]*list.Element
-	order    *list.List
-	mu       sync.Mutex
-	onEvict  EvictionCallback
+	capacity       int
+	cache          map[string]*list.Element
+	order          *list.List
+	mu             sync.Mutex
+	onEvict        EvictionCallback
+	deleteRoutines map[string]Routine
 }
 
 // NewLRUCache creates a new LRUCache with the given capacity.
 func NewLRUCache(capacity int, onEvict EvictionCallback) *LRUCache {
 	logger.Log.Printf("Creating LRU cache with capacity: %d", capacity)
 	return &LRUCache{
-		capacity: capacity,
-		cache:    make(map[string]*list.Element),
-		order:    list.New(),
-		onEvict:  onEvict,
+		capacity:       capacity,
+		cache:          make(map[string]*list.Element),
+		order:          list.New(),
+		onEvict:        onEvict,
+		deleteRoutines: make(map[string]Routine),
 	}
 }
 
@@ -126,4 +134,25 @@ func (c *LRUCache) GetItems() []CacheItem {
 		items = append(items, *el.Value.(*CacheItem))
 	}
 	return items
+}
+
+func (c *LRUCache) GetRoutine(key string) Routine {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.deleteRoutines[key]
+}
+
+func (c *LRUCache) SetRoutine(key string, rt Routine) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.deleteRoutines[key] = rt
+}
+
+func (c *LRUCache) DeleteRoutine(key string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	delete(c.deleteRoutines, key)
 }

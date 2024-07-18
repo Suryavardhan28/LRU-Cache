@@ -15,8 +15,7 @@ import (
 )
 
 var (
-	cache          *lruCache.LRUCache
-	deleteRoutines = make(map[string]context.CancelFunc)
+	cache *lruCache.LRUCache
 )
 
 func init() {
@@ -55,6 +54,37 @@ func GetItem(ctx context.Context) http.HandlerFunc {
 		logger.Log.Printf("GetItem called with key: %s", key)
 		if value, found := cache.Get(key); found {
 			logger.Log.Printf("Key found: %s", key)
+
+			// Cancel the old delete routine if it exists
+			rt := cache.GetRoutine(key)
+			if rt.CancelFunc != nil {
+				logger.Log.Printf("Cancelling existing delete routine for existing key: %s", key)
+				rt.CancelFunc()
+			}
+
+			cache.Set(key, value, rt.Duration)
+			expiryTime := time.Now().Add(rt.Duration).Format("02/01/06 15:04:05")
+			broadcast <- map[string]interface{}{"action": "set", "key": key, "value": value, "expiry": expiryTime}
+			logger.Log.Printf("Set key: %s with expiry: %s", key, expiryTime)
+
+			// Create a new context with cancel function for the delete routine
+			ctx, cancel := context.WithCancel(ctx)
+			cache.SetRoutine(key, lruCache.Routine{CancelFunc: cancel, Duration: rt.Duration})
+
+			// Start a goroutine to delete the item after the expiry duration
+			go func() {
+				select {
+				case <-time.After(rt.Duration):
+					cache.Delete(key)
+					broadcast <- map[string]interface{}{"action": "delete", "key": key}
+					logger.Log.Printf("Deleted key: %s after expiry", key)
+				case <-ctx.Done():
+					// The delete routine was canceled
+					cache.DeleteRoutine(key)
+					logger.Log.Printf("Delete routine entry removed for key: %s", key)
+				}
+			}()
+
 			json.NewEncoder(w).Encode(map[string]interface{}{"value": value})
 		} else {
 			logger.Log.Printf("Key not found: %s", key)
@@ -77,9 +107,9 @@ func SetItem(ctx context.Context) http.HandlerFunc {
 		duration := time.Duration(request["expiry"].(float64)) * time.Second
 
 		// Cancel the old delete routine if it exists
-		if cancelFunc, found := deleteRoutines[key]; found {
+		if rt := cache.GetRoutine(key); rt.CancelFunc != nil {
 			logger.Log.Printf("Cancelling existing delete routine for existing key: %s", key)
-			cancelFunc()
+			rt.CancelFunc()
 		}
 
 		cache.Set(key, value, duration)
@@ -87,9 +117,9 @@ func SetItem(ctx context.Context) http.HandlerFunc {
 		broadcast <- map[string]interface{}{"action": "set", "key": key, "value": value, "expiry": expiryTime}
 		logger.Log.Printf("Set key: %s with expiry: %s", key, expiryTime)
 
-		// Create a new context with cancel function for the delete routine
+		// Create a new context with cancel function and duration for the delete routine
 		ctx, cancel := context.WithCancel(ctx)
-		deleteRoutines[key] = cancel
+		cache.SetRoutine(key, lruCache.Routine{CancelFunc: cancel, Duration: duration})
 
 		// Start a goroutine to delete the item after the expiry duration
 		go func() {
@@ -100,7 +130,7 @@ func SetItem(ctx context.Context) http.HandlerFunc {
 				logger.Log.Printf("Deleted key: %s after expiry", key)
 			case <-ctx.Done():
 				// The delete routine was canceled
-				delete(deleteRoutines, key)
+				cache.DeleteRoutine(key)
 				logger.Log.Printf("Delete routine entry removed for key: %s", key)
 			}
 		}()
@@ -120,9 +150,9 @@ func DeleteItem(ctx context.Context) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
-		if cancelFunc, found := deleteRoutines[key]; found {
+		if rt := cache.GetRoutine(key); rt.CancelFunc != nil {
 			logger.Log.Printf("Cancelling delete routine for deleted key: %s", key)
-			cancelFunc()
+			rt.CancelFunc()
 		}
 		broadcast <- map[string]interface{}{"action": "delete", "key": key}
 		logger.Log.Printf("Deleted key: %s", key)
@@ -133,9 +163,9 @@ func DeleteItem(ctx context.Context) http.HandlerFunc {
 
 func onEvict(key string, value interface{}) {
 	logger.Log.Printf("Evicting key: %s", key)
-	if cancelFunc, found := deleteRoutines[key]; found {
+	if rt := cache.GetRoutine(key); rt.CancelFunc != nil {
 		logger.Log.Printf("Cancelling delete routine for deleted key: %s", key)
-		cancelFunc()
+		rt.CancelFunc()
 	}
 	broadcast <- map[string]interface{}{"action": "delete", "key": key, "value": value}
 }
